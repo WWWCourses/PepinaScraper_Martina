@@ -1,12 +1,19 @@
+import requests
+import os
 from bs4 import BeautifulSoup
-
+from PepinaScraper.db import DB
 
 class Scraper:
     def __init__(self, url):
         self.url = url
         self.shoes = []
 
+        self.db = DB()
+
     def get_html(self, url):
+        filename = './data/obuvki.html'
+        headers = {"User-Agent": "Mozilla/5.0"}
+
         if os.path.exists(filename):
             with open(filename, "r", encoding="utf-8") as f:
                 print("Зареждане на съдържание от локалния файл")
@@ -72,11 +79,11 @@ class Scraper:
 
 
     def run(self):
-        print('Scraper started!')
+        self.db.drop_shoes_table()
+        self.db.create_shoes_table()
 
-
-# scraper = ShoeScraper("https://example.com/damski-obuvki")
-# all_shoes = scraper.scrape()
+        html = self.get_html(self.url)
+        self.parse_data(html)
 
 # scraper.sort_by_brand()
 # print("Обувки, сортирани по брандове:")
