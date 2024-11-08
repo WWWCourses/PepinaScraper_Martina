@@ -44,11 +44,9 @@ class ShoeScraper:
             print("Секцията 'Дамски обувки' не беше намерена на страницата.")
 
     def sort_by_brand(self):
-        """Сортиране на обувките по бранд"""
         self.shoes.sort(key=lambda x: x['brand'])
     
     def filter_by_size(self, size):
-        """Филтриране по размер"""
         return [shoe for shoe in self.shoes if size in shoe['sizes']]
     
     def scrape(self):
