@@ -1,0 +1,6 @@
+[mysql]
+HOST     = 127.0.0.1
+USER     = your_username
+PASSWORD = your_password
+DATABASE = your_database
+PORT=3306

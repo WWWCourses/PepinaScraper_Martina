@@ -21,3 +21,8 @@ pepina.bg  предлага на българския пазар селекци�
 ## Забележка
 
 Вашият crawler трябва да се съобразява с правилата в https://pepina.bg/robots.txt
+
+## DB Config
+
+copy `config.sample.ini` to `config.ini` and update the values with your own credentials.
+
