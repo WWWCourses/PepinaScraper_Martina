@@ -9,49 +9,58 @@ from PyQt6.QtWidgets import QMessageBox
 from PepinaScraper import read_config
 from PepinaScraper.crawler import Crawler
 
+from PyQt6.QtCore import QThread, pyqtSignal
+
 BASE_URL = 'https://pepina.bg/products/jeni/obuvki'
+
+class ScraperThread(QThread):
+    finished = pyqtSignal()
+    error = pyqtSignal(str)
+
+    def __init__(self, base_url):
+        super().__init__()
+        self.base_url = base_url
+
+    def run(self):
+        try:
+            scraper = Scraper(self.base_url)
+            scraper.run()  # това ще се стартира в отделен thread
+            self.finished.emit()
+        except Exception as e:
+            self.error.emit(str(e))
 
 
 class DataTable(qtw.QTableWidget):
     '''Клас за представяне на таблицата с данни'''
-    def __init__(self, *args, **kwargs):
+    def __init__(self, db, *args, **kwargs):
         super().__init__(*args, **kwargs)
-
-        self.db = DB()  # Създаване на обект за връзка
-        if not self.db.conn: # Проверка за успешно свързване с базата данни
-            app = qtw.QApplication.instance() or qtw.QApplication(sys.argv)
-            qtw.QMessageBox.critical(None, "Грешка на базата данни!", "Провалена връзка на базата с данни.")
-            return
-
-        self.data = self.db.select_all_data()  #  Извличаме данни от базата
+        self.db = db  # Pass database object explicitly
         self.column_names = ["Brand", "Price", "Color"]
         self.setup_table()
 
     def setup_table(self):
-        self.setColumnCount(len(self.column_names)) #Брой колони
-        self.setHorizontalHeaderLabels(self.column_names) #Задаваме заглавия на колоните
-        self.resizeColumnsToContents() #Настройка на колоните спрямо съдържанието
-        self.setSortingEnabled(True) # Разрешаваме сортиране на таблицата
-        self.update_table(self.data)
+        self.setColumnCount(len(self.column_names))
+        self.setHorizontalHeaderLabels(self.column_names)
+        self.resizeColumnsToContents()
+        self.setSortingEnabled(True)
+        self.update_table(self.db.select_all_data())
 
     def update_table(self, data):
-        '''Ъпдейт на таблицата с новите данни'''
-        self.setRowCount(0) #изчистване на старите редове
+        self.setRowCount(0)
         for row_num, row_data in enumerate(data):
             self.insertRow(row_num)
             for col_num, value in enumerate(row_data):
                 self.setItem(row_num, col_num, qtw.QTableWidgetItem(str(value)))
 
     def filter_by_size(self, size):
-        '''Функция за филтриране по размер'''
         try:
-            size=float(size) #Проверяваме дали въведения номер е валиден
-            data = self.db.select_data_by_size(size) #извличане и сортиране на данни
+            size = float(size)
+            data = self.db.select_data_by_size(size)
             self.update_table(data)
         except ValueError:
             qtw.QMessageBox.warning(None, "Грешка", "Моля, въведете валиден номер.")
 
-    def sort_by_price(self, ascending = True):
+    def sort_by_price(self, ascending=True):
         column = 1
         order = qtc.Qt.SortOrder.AscendingOrder if ascending else qtc.Qt.SortOrder.DescendingOrder
         self.sortItems(column, order)
@@ -59,41 +68,33 @@ class DataTable(qtw.QTableWidget):
 
 class TableViewWidget(qtw.QWidget):
     '''Клас за интерфейс и сортиране с филтър'''
-    def __init__(self, parent, *args, **kwargs):
+    def __init__(self, db, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.parent = parent
-        self.setup_gui() #Настройване на графичен интерфейс
+        self.tableView = DataTable(db)
+        self.setup_gui()
 
     def setup_gui(self):
-        '''Функция за настройване на графичен интерфейс'''
-        layout = qtw.QVBoxLayout() #Основен вертикален лейаут
-
-        #Добавяне на таблица към интерфейса
-        self.tableView = DataTable()
+        layout = qtw.QVBoxLayout()
         layout.addWidget(self.tableView)
 
-        #Поле за филтриране по размер на обувката
-        self.filter_size_input = qtw.QLineEdit(self)
+        self.filter_size_input = qtw.QLineEdit()
         self.filter_size_input.setPlaceholderText('Въведете номера на обувката (пример, "38") ')
         self.filter_size_input.textChanged.connect(self.tableView.filter_by_size)
         layout.addWidget(self.filter_size_input)
 
-        #Бутон за сортиране по цена - възходящ ред
-        btnSortAsc= qtw.QPushButton("Сортиране по възходящ ред.")
-        btnSortAsc.clicked.connect(lambda:self.tableView.sort_by_price(ascending=True)) #Възходящо сортиране
+        btnSortAsc = qtw.QPushButton("Сортиране по възходящ ред.")
+        btnSortAsc.clicked.connect(lambda: self.tableView.sort_by_price(ascending=True))
         layout.addWidget(btnSortAsc)
 
-        #Бутон за сортиране по цена - низходящ ред
         btnSortDesc = qtw.QPushButton("Сортиране по низходящ ред.")
-        btnSortDesc.clicked.connect(lambda:self.tableView.sort_by_price(ascending=False))#Низходящо сортиране
+        btnSortDesc.clicked.connect(lambda: self.tableView.sort_by_price(ascending=False))
         layout.addWidget(btnSortDesc)
 
-        #Бутон за затваряне на прозореца
         btnClose = qtw.QPushButton("Затваряне")
         btnClose.clicked.connect(self.close)
         layout.addWidget(btnClose)
 
-        self.setLayout(layout) #Прилагам лейаута към текущия интерфейс
+        self.setLayout(layout)
 
 
 class MainWindow(qtw.QMainWindow):
@@ -102,72 +103,70 @@ class MainWindow(qtw.QMainWindow):
         super().__init__(*args, **kwargs)
         self.setWindowTitle('Pepina Crawler')
 
-        layout = qtw.QVBoxLayout() #Основен вертикален лейаут
+        self.db = DB()
+        if not self.db.conn:
+            QMessageBox.critical(None, "Грешка на базата данни!", "Провалена връзка на базата с данни.")
+            sys.exit()
 
-        #Главна картинка - основен прозорец
-        img_label = qtw.QLabel(self)
-        pixmap = QPixmap('./PepinaScraper/images/PepinaScraper.png')
+        self.setup_gui()
+
+    def setup_gui(self):
+        layout = qtw.QVBoxLayout()
+
+        img_label = qtw.QLabel()
+        pixmap = QPixmap(self.get_image_path())
         pixmap = pixmap.scaled(600, 400, qtc.Qt.AspectRatioMode.KeepAspectRatio)
         img_label.setPixmap(pixmap)
         img_label.setAlignment(qtc.Qt.AlignmentFlag.AlignCenter)
         layout.addWidget(img_label)
 
-        #Главен бутон за стартиране на скрейпа
         btnRunScraper = qtw.QPushButton('Стартиране на Скрейп')
-        btnRunScraper.clicked.connect(self.run_scraper) #При натиск на бутона -стартира
+        btnRunScraper.clicked.connect(self.run_scraper)
         layout.addWidget(btnRunScraper)
 
-        #Бутон за показване на данните в таблица
         self.btnShowData = qtw.QPushButton("Показване на данните")
-        self.btnShowData.clicked.connect(self.show_data) #При натискане с епоказват данните
+        self.btnShowData.clicked.connect(self.show_data)
         layout.addWidget(self.btnShowData)
 
-        #Основен widget с layout
         mainWidget = qtw.QWidget()
         mainWidget.setLayout(layout)
         self.setCentralWidget(mainWidget)
-        self.show() #Показване на прозореца
+        self.show()
+
+    def get_image_path(self):
+        return os.path.abspath('./PepinaScraper/images/PepinaScraper.png')
 
     def run_scraper(self):
-        '''Функция за стартиране на скрейпване'''
-        try:
-            scraper = Scraper(BASE_URL)
-            scraper.run()
-            self.load_data()
-        except Exception as e:
-            qtw.QMessageBox.critical(self, "Грешка", f"Скрейпингът не е извършен: {str(e)}")
+        '''Функция за стартиране на скрейпване в отделен thread'''
+        self.scraper_thread = ScraperThread(BASE_URL)
+        self.scraper_thread.finished.connect(self.on_scraper_finished)
+        self.scraper_thread.error.connect(self.on_scraper_error)
+        self.scraper_thread.start()
+
+        # Disable UI elements while scraping
+        self.setCursor(qtc.Qt.CursorShape.WaitCursor)
+        self.btnShowData.setEnabled(False)
+
+    def on_scraper_finished(self):
+        '''Callback when scraping is done'''
+        self.setCursor(qtc.Qt.CursorShape.ArrowCursor)
+        self.btnShowData.setEnabled(True)
+        self.load_data()  # Refresh the data in the table
+        qtw.QMessageBox.information(self, "Успех", "Скрейпингът е успешно завършен.")
+
+    def on_scraper_error(self, error_message):
+        '''Callback for handling scraper errors'''
+        self.setCursor(qtc.Qt.CursorShape.ArrowCursor)
+        self.btnShowData.setEnabled(True)
+        qtw.QMessageBox.critical(self, "Грешка", f"Скрейпингът не е извършен: {error_message}")
 
     def show_data(self):
-        '''Функция за показване на данните в таблица:'''
-
-        #Проверяваме дали `tableViewWidget` вече съществува, ако не - създаваме го
         if not hasattr(self, "tableViewWidget"):
-            self.tableViewWidget = TableViewWidget(parent=self)  # Обект - създаване TableViewWidget
-        self.tableViewWidget.show()  # Показване на таблицата
-        self.tableViewWidget.update_table(self.db.select_all_data())
-
-    def load_data(self):
-        '''Функция за зареждане на данните'''
-        db = DB() #Създавнае на обект за работа
-        data = db.select_all_data() #Извличане на всички данни
-        if hasattr(self,"tableViewWidget"):
-            self.tableViewWidget.update_table(data) #Обновяване на таблицата
-
-    def run_crawler(self):
-       self.setCursor(qtc.Qt.WaitCursor)
-       self.crawler.run()
-       self.setCursor(qtc.Qt.ArrowCursor)
+            self.tableViewWidget = TableViewWidget(self.db)
+        self.tableViewWidget.show()
 
 
 if __name__ == '__main__':
-    app = qtw.QApplication(sys.argv) #Създаваме приложението
-
-    # base_url = 'https://pepina.bg/products/jeni/obuvki'
-    # try:
-    #     crawler = Crawler(base_url)
-    #     crawler.run()
-    # except Exception as e:
-    #     qtw.QMessageBox.critical(None, "Грешка при Crawler", f"Процесът на краулинг се провали: {str(e)}")
-
-    window = MainWindow() #Създаваме главен прозорец
-    sys.exit(app.exec()) #Стартиране на основни цикъл на приложението
+    app = qtw.QApplication(sys.argv)
+    window = MainWindow()
+    sys.exit(app.exec())
