@@ -64,7 +64,6 @@ class Scraper:
 
                     if price and price < 1000:
                         shoe_data["price"] = price
-                        print(f'Current shoe data: {shoe_data}')
                     else:
                         continue # skip loop if price doesn't meet condition
                 else:
@@ -92,23 +91,10 @@ class Scraper:
                 else:
                     shoe_data["sizes"] = []
 
-                print(f"Добавена обувка {shoe_data}")
-
                 self.shoes_data.append(shoe_data)
         else:
             print("Не са намерени продукти в страницата!.")
 
-    def sort_by_brand(self):
-        self.shoes_data.sort(key=lambda x: x['brand'])
-
-    def filter_by_size(self, size):
-        return [shoe for shoe in self.shoes_data if size in shoe['sizes']]
-
-    def scrape(self):
-        html = self.get_html(self.url)
-        if html:
-            self.parse_data(html)
-        return self.shoes_data
 
     def run(self):
         print("Започва scraping процесът...")
@@ -123,6 +109,7 @@ class Scraper:
         html = self.get_html(self.url)
         if html:
             self.parse_data(html)
+            self.db.insert_rows(self.shoes_data)
             print(f"Парсингът е завършен, намерени обувки:{len(self.shoes_data)}!")
         else:
             print(f"Не беше получен HTML от сайта!")

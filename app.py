@@ -1,15 +1,16 @@
 import sys
 import os
+
 from PyQt6 import QtWidgets as qtw
 from PyQt6 import QtCore as qtc
 from PyQt6.QtGui import QPixmap
+from PyQt6.QtWidgets import QMessageBox
+from PyQt6.QtCore import QThread, pyqtSignal
+from PyQt6.QtSql import QSqlTableModel
+
 from PepinaScraper.scraper import Scraper
 from PepinaScraper.db import DB
-from PyQt6.QtWidgets import QMessageBox
-from PepinaScraper import read_config
-from PepinaScraper.crawler import Crawler
 
-from PyQt6.QtCore import QThread, pyqtSignal
 
 BASE_URL = 'https://pepina.bg/products/jeni/obuvki'
 
@@ -30,71 +31,56 @@ class ScraperThread(QThread):
             self.error.emit(str(e))
 
 
-class DataTable(qtw.QTableWidget):
-    '''Клас за представяне на таблицата с данни'''
-    def __init__(self, db, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.db = db  # Pass database object explicitly
-        self.column_names = ["Brand", "Price", "Color"]
-        self.setup_table()
-
-    def setup_table(self):
-        self.setColumnCount(len(self.column_names))
-        self.setHorizontalHeaderLabels(self.column_names)
-        self.resizeColumnsToContents()
-        self.setSortingEnabled(True)
-        self.update_table(self.db.select_all_data())
-
-    def update_table(self, data):
-        self.setRowCount(0)
-        for row_num, row_data in enumerate(data):
-            self.insertRow(row_num)
-            for col_num, value in enumerate(row_data):
-                self.setItem(row_num, col_num, qtw.QTableWidgetItem(str(value)))
-
-    def filter_by_size(self, size):
-        try:
-            size = float(size)
-            data = self.db.select_data_by_size(size)
-            self.update_table(data)
-        except ValueError:
-            qtw.QMessageBox.warning(None, "Грешка", "Моля, въведете валиден номер.")
-
-    def sort_by_price(self, ascending=True):
-        column = 1
-        order = qtc.Qt.SortOrder.AscendingOrder if ascending else qtc.Qt.SortOrder.DescendingOrder
-        self.sortItems(column, order)
-
-
 class TableViewWidget(qtw.QWidget):
-    '''Клас за интерфейс и сортиране с филтър'''
-    def __init__(self, db, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.tableView = DataTable(db)
-        self.setup_gui()
+    def __init__(self, db_connection, parent=None):
+        super().__init__(parent)
+        self.db_connection = db_connection
+        self.setWindowTitle("Shoes data")
 
-    def setup_gui(self):
-        layout = qtw.QVBoxLayout()
-        layout.addWidget(self.tableView)
+        # Layout setup
+        layout = qtw.QVBoxLayout(self)
 
-        self.filter_size_input = qtw.QLineEdit()
-        self.filter_size_input.setPlaceholderText('Въведете номера на обувката (пример, "38") ')
-        self.filter_size_input.textChanged.connect(self.tableView.filter_by_size)
-        layout.addWidget(self.filter_size_input)
+        # Filter input for size
+        self.filter_input = qtw.QLineEdit(self)
+        self.filter_input.setPlaceholderText("Filter by size...")
+        self.filter_input.textChanged.connect(self.apply_filter)
+        layout.addWidget(self.filter_input)
 
-        btnSortAsc = qtw.QPushButton("Сортиране по възходящ ред.")
-        btnSortAsc.clicked.connect(lambda: self.tableView.sort_by_price(ascending=True))
-        layout.addWidget(btnSortAsc)
+        # Table view setup
+        self.table_view = qtw.QTableView(self)
+        layout.addWidget(self.table_view)
 
-        btnSortDesc = qtw.QPushButton("Сортиране по низходящ ред.")
-        btnSortDesc.clicked.connect(lambda: self.tableView.sort_by_price(ascending=False))
-        layout.addWidget(btnSortDesc)
+        # Model setup
+        self.model = QSqlTableModel(self, db_connection)
+        self.model.setTable("shoes")
+        self.model.setEditStrategy(QSqlTableModel.EditStrategy.OnFieldChange)
+        self.model.select()
 
-        btnClose = qtw.QPushButton("Затваряне")
-        btnClose.clicked.connect(self.close)
-        layout.addWidget(btnClose)
+        # Configure column headers (optional)
+        self.model.setHeaderData(0, qtc.Qt.Orientation.Horizontal, "Brand")
+        self.model.setHeaderData(1, qtc.Qt.Orientation.Horizontal, "Title")
+        self.model.setHeaderData(2, qtc.Qt.Orientation.Horizontal, "Price")
+        self.model.setHeaderData(3, qtc.Qt.Orientation.Horizontal, "Color")
+        self.model.setHeaderData(4, qtc.Qt.Orientation.Horizontal, "Sizes")
+        self.model.setHeaderData(5, qtc.Qt.Orientation.Horizontal, "Link")
 
-        self.setLayout(layout)
+        # Set model to table view
+        self.table_view.setModel(self.model)
+
+        # Enable sorting
+        self.table_view.setSortingEnabled(True)
+
+        # Customize table view
+        self.table_view.resizeColumnsToContents()
+
+    def apply_filter(self):
+        # Get the text from the filter input
+        size = self.filter_input.text().strip()
+        # Apply filter if there's a size input, otherwise clear filter
+        if size:
+            self.model.setFilter(f"FIND_IN_SET('{size}', sizes) > 0")
+        else:
+            self.model.setFilter("")  # Clear the filter
 
 
 class MainWindow(qtw.QMainWindow):
@@ -151,7 +137,6 @@ class MainWindow(qtw.QMainWindow):
         '''Callback when scraping is done'''
         self.setCursor(qtc.Qt.CursorShape.ArrowCursor)
         self.btnShowData.setEnabled(True)
-        self.load_data()  # Refresh the data in the table
         qtw.QMessageBox.information(self, "Успех", "Скрейпингът е успешно завършен.")
 
     def on_scraper_error(self, error_message):
@@ -162,7 +147,7 @@ class MainWindow(qtw.QMainWindow):
 
     def show_data(self):
         if not hasattr(self, "tableViewWidget"):
-            self.tableViewWidget = TableViewWidget(self.db)
+            self.tableViewWidget = TableViewWidget(self.db.qsql_conn)
         self.tableViewWidget.show()
 
 

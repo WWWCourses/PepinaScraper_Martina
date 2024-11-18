@@ -1,4 +1,8 @@
+import json
+
+from PyQt6.QtSql import QSqlDatabase
 import mysql.connector as mc
+
 from PepinaScraper.read_config import read_db_config
 from .read_config import read_db_config
 
@@ -14,6 +18,26 @@ class DB():
         except mc.Error as e:
             print(f"Грешка при свързване с Mysql: {e}")
             raise Exception("Неуспешно свързване с базата данни!")
+
+        # Register QSqlDatabase connection to be used with QSqlTableModel
+        self.qsql_conn = self._setup_qt_database(mysql_config)
+
+
+    def _setup_qt_database(self, config):
+        """
+        Creates and registers a QSqlDatabase connection
+        """
+        db = QSqlDatabase.addDatabase("QMYSQL", "qt_connection")
+        db.setHostName(config['host'])
+        db.setDatabaseName(config['database'])
+        db.setUserName(config['user'])
+        db.setPassword(config['password'])
+        if not db.open():
+            print(f"Грешка при отваряне на QSqlDatabase: {db.lastError().text()}")
+            raise Exception("QSqlDatabase не можа да се свърже.")
+        print("Успешно свързване към базата чрез QSqlDatabase!")
+        return db
+
 
     # Проверява и възстановява връзката към базата данни
     def check_connection(self):
@@ -33,7 +57,7 @@ class DB():
                 brand VARCHAR(100) NOT NULL,
                 price DECIMAL(10,2) NOT NULL,
                 color VARCHAR(50) NOT NULL,
-                sizes VARCHAR(255) NOT NULL, 
+                sizes VARCHAR(255) NOT NULL,
                 updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
                 CONSTRAINT brand_color_size UNIQUE (brand, color, sizes)
             );
@@ -61,10 +85,10 @@ class DB():
             print(f"Грешка при изтриване на таблицата: {e}")
             self.conn.rollback()
 
-    # Добавя множество редове в таблицата
     def insert_rows(self, rows_data):
+        '''# Добавя множество редове в таблицата'''
         sql = """
-            INSERT IGNORE INTO shoes 
+            INSERT INTO shoes
             (brand, price, color, sizes)
             VALUES (%s, %s, %s, %s)
             ON DUPLICATE KEY UPDATE price=VALUES(price), sizes=VALUES(sizes)
@@ -72,12 +96,32 @@ class DB():
         self.check_connection()
         try:
             with self.conn.cursor() as cursor:
-                cursor.executemany(sql, rows_data)
+                # Подготвяме данните за вмъкване, като преобразуваме 'sizes' в JSON
+                data = [
+                    (row['brand'], row['price'], row['color'], json.dumps(row['sizes']))
+                    for row in rows_data
+                ]
+                cursor.executemany(sql, data)  # Вмъкваме всички редове с една заявка
+            self.conn.commit()
+            print(f"Добавени са {len(rows_data)} редове!")
+        except mc.Error as e:
+            print(f"Грешка при вмъкване на редове: {e}!")
+            self.conn.rollback()
+
+
+    def insert_rows(self, rows_data):
+        sql = "INSERT INTO shoes (brand, price, color, sizes) VALUES (%s, %s, %s, %s)"
+        self.check_connection()
+        try:
+            with self.conn.cursor() as cursor:
+                for row in rows_data:
+                    cursor.execute(sql, (row['brand'], row['price'], row['color'], ",".join(row['sizes'])))
                 self.conn.commit()
                 print(f"Добавени са {cursor.rowcount} редове!")
         except mc.Error as e:
             print(f"Грешка при вмъкване на редове: {e}!")
             self.conn.rollback()
+
 
     # Добавя един ред след валидиране
     def insert_row(self, row_data):
@@ -113,7 +157,7 @@ class DB():
             with self.conn.cursor() as cursor:
                 cursor.execute(sql)
                 result = cursor.fetchall()
-                return result if result else []                
+                return result if result else []
         except mc.Error as e:
             print(f"Грешка при извличане на данни: {e}")
             return []
@@ -131,7 +175,7 @@ class DB():
             with self.conn.cursor() as cursor:
                 cursor.execute(sql)
                 result = cursor.fetchall()
-                return result if result else []            
+                return result if result else []
         except mc.Error as e:
             print(f"Грешка при сортиране: {e}")
             return []
