@@ -2,14 +2,12 @@ import re
 import requests
 import os
 from bs4 import BeautifulSoup
-from PepinaScraper.db import DB
 
 
 class Scraper:
     def __init__(self, url):
         self.url = url
         self.shoes_data = []
-        self.db = DB()
         self.output_dir = './data'
         self.filename = 'obuvki.html'
         self.file_path = os.path.join(self.output_dir, self.filename)
@@ -99,17 +97,9 @@ class Scraper:
     def run(self):
         print("Започва scraping процесът...")
 
-        try:
-            self.db.drop_shoes_table()
-            self.db.create_shoes_table()
-        except Exception as e:
-            print(f"Грешка при работа с базата данни: {e}")
-            return
-
         html = self.get_html(self.url)
         if html:
             self.parse_data(html)
-            self.db.insert_rows(self.shoes_data)
             print(f"Парсингът е завършен, намерени обувки:{len(self.shoes_data)}!")
         else:
             print(f"Не беше получен HTML от сайта!")
