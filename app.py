@@ -117,6 +117,9 @@ class MainWindow(qtw.QMainWindow):
         except Exception as e:
             qtw.QMessageBox.critical(self, "Грешка", f"Скрейпингът не е извършен: {str(e)}")
 
+        # Изпълняваме select отново, за да презаредим данните във view-то
+        self.tableViewWidget.model.select()
+
     def show_data(self):
         '''Функция за показване на данните в таблица:'''
 
