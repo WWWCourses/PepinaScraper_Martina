@@ -71,6 +71,9 @@ class MainWindow(qtw.QMainWindow):
             QMessageBox.critical(None, "Грешка на базата данни!", "Провалена връзка на базата с данни.")
             sys.exit()
 
+        # инициализираме tableViewWidget, но ще го създадем във self.show_data()
+        self.tableViewWidget = None
+
         self.setup_gui()
 
     def setup_gui(self):
@@ -117,16 +120,21 @@ class MainWindow(qtw.QMainWindow):
         except Exception as e:
             qtw.QMessageBox.critical(self, "Грешка", f"Скрейпингът не е извършен: {str(e)}")
 
-        # Изпълняваме select отново, за да презаредим данните във view-то
-        self.tableViewWidget.model.select()
+        # Ако вече сме създали tableView, рефрешваме модела за да отчете евентуални промени в базата данни
+        if self.tableViewWidget:
+            self.tableViewWidget.model.select()
 
     def show_data(self):
         '''Функция за показване на данните в таблица:'''
 
         #Проверяваме дали `tableViewWidget` вече съществува, ако не - създаваме го
-        if not hasattr(self, "tableViewWidget"):
+        if self.tableViewWidget is None:
             self.tableViewWidget = TableViewWidget(self.db.qsql_conn)  # Обект - създаване TableViewWidget
-        self.tableViewWidget.show()  # Показване на таблицата
+
+        # рефрешваме модела за да отчете евентуални промени в базата данни
+        self.tableViewWidget.model.select()
+        # Показване на таблицата
+        self.tableViewWidget.show()
 
 
 if __name__ == '__main__':

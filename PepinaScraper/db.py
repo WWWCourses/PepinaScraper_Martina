@@ -26,6 +26,9 @@ class DB():
     def _setup_qt_database(self, config):
         """
         Creates and registers a QSqlDatabase connection
+
+        Необходимо е за да може да работим със стандартния модел QSqlTableModel,
+        който изисква  изпозлването на QSqlDatabase, а не на mysql.connector
         """
         db = QSqlDatabase.addDatabase("QMYSQL", "qt_connection")
         db.setHostName(config['host'])
@@ -37,7 +40,6 @@ class DB():
             raise Exception("QSqlDatabase не можа да се свърже.")
         print("Успешно свързване към базата чрез QSqlDatabase!")
         return db
-
 
     # Проверява и възстановява връзката към базата данни
     def check_connection(self):
@@ -108,94 +110,7 @@ class DB():
             print(f"Грешка при вмъкване на редове: {e}!")
             self.conn.rollback()
 
-
-    # Добавя един ред след валидиране
-    def insert_row(self, row_data):
-        if not row_data.get('brand') or not row_data.get('color'):
-            print("Липсва информация за бранда или цвета")
-            return
-
-        if row_data.get('price', 0) >= 1000:
-            print("Цена над 1000 лева не може да бъде добавена!")
-            return
-
-        sql = """
-            INSERT IGNORE INTO shoes
-            (brand, price, color, sizes)
-            VALUES (%s, %s, %s, %s)
-            ON DUPLICATE KEY UPDATE price=VALUES(price), sizes=VALUES(sizes)
-        """
-        self.check_connection()
-        try:
-            with self.conn.cursor() as cursor:
-                cursor.execute(sql, tuple(row_data.values()))
-                self.conn.commit()
-                print(f"Добавен ред: {row_data}!")
-        except mc.Error as e:
-            print(f"Грешка при вмъкване на редове: {e}!")
-            self.conn.rollback()
-
-    # Извлича всички данни от таблицата
-    def select_all_data(self):
-        sql = "SELECT id, brand, price, color FROM shoes"
-        self.check_connection()
-        try:
-            with self.conn.cursor() as cursor:
-                cursor.execute(sql)
-                result = cursor.fetchall()
-                return result if result else []
-        except mc.Error as e:
-            print(f"Грешка при извличане на данни: {e}")
-            return []
-
-    # Извлича данни от таблицата със сортиране
-    def select_all_data_sorted(self, column="price", ascending=True):
-        valid_columns = {"price", "brand", "color", "sizes"}  # Разрешение за сортиране
-        if column not in valid_columns:
-            raise ValueError(f"Невалидна колона за сортиране: {column}")
-
-        order = 'ASC' if ascending else 'DESC'
-        sql = f"SELECT id, brand, price, color, sizes FROM shoes ORDER BY {column} {order}"
-        self.check_connection()
-        try:
-            with self.conn.cursor() as cursor:
-                cursor.execute(sql)
-                result = cursor.fetchall()
-                return result if result else []
-        except mc.Error as e:
-            print(f"Грешка при сортиране: {e}")
-            return []
-
-    # Филтрира данни по размер
-    def select_data_by_size(self, size):
-        sql = "SELECT id, brand, price, color, sizes FROM shoes WHERE FIND_IN_SET(%s, sizes) > 0;"
-        self.check_connection()
-        try:
-            with self.conn.cursor() as cursor:
-                cursor.execute(sql, (size,))
-                result = cursor.fetchall()
-                return result if result else []
-        except mc.Error as e:
-            print(f"Грешка при извличане на данни по размер: {e}")
-            return []
-
-    # Извлича последната дата на обновяване
-    def get_last_updated_date(self):
-        sql = 'SELECT MAX(updated_at) FROM shoes;'
-        self.check_connection()
-        try:
-            with self.conn.cursor() as cursor:
-                cursor.execute(sql)
-                result = cursor.fetchone()
-                return result[0] if result else None
-        except mc.Error as e:
-            print(f"Грешка при извличане на последната дата на обновяване: {e}.")
-            return None
-
 if __name__ == '__main__':
     db = DB()
     db.create_shoes_table()
 
-    # db.get_column_names()
-    res = db.get_last_updated_date()
-    print(res)

@@ -109,13 +109,3 @@ class Scraper:
 if __name__ == "__main__":
     scraper = Scraper("https://pepina.bg/products/jeni/obuvki")
     scraper.run()
-
-# scraper.sort_by_brand()
-# print("Обувки, сортирани по брандове:")
-# for shoe in scraper.shoes:
-#     print(shoe)
-
-# filtered_by_size = scraper.filter_by_size("38")
-# print("\nОбувки с размер 38:")
-# for shoe in filtered_by_size:
-#     print(shoe)
