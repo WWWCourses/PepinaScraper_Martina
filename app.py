@@ -22,12 +22,6 @@ class TableViewWidget(qtw.QWidget):
         # Layout setup
         layout = qtw.QVBoxLayout(self)
 
-        # Filter input for size
-        self.filter_input = qtw.QLineEdit(self)
-        self.filter_input.setPlaceholderText("Filter by size...")
-        self.filter_input.textChanged.connect(self.apply_filter)
-        layout.addWidget(self.filter_input)
-
         # Table view setup
         self.table_view = qtw.QTableView(self)
         layout.addWidget(self.table_view)
@@ -38,23 +32,31 @@ class TableViewWidget(qtw.QWidget):
         self.model.setEditStrategy(QSqlTableModel.EditStrategy.OnFieldChange)
         self.model.select()
 
-
         # Set model to table view
         self.table_view.setModel(self.model)
 
-        # Enable sorting
+        # Включваме сортиране на колоните - така няма нужда да пишем друг код за сортиране,
+        # това ще се предостави автоматично от модела при клик върху хедърите на колоните
         self.table_view.setSortingEnabled(True)
+
+        # Тук е всичко необходимо за филтриране по size.
+        # Самите действия са във self.apply_filter
+        self.filter_input = qtw.QLineEdit(self)
+        self.filter_input.setPlaceholderText("Filter by size...")
+        self.filter_input.textChanged.connect(self.apply_filter)
+        layout.addWidget(self.filter_input)
+
 
         # Customize table view
         self.table_view.resizeColumnsToContents()
 
     def apply_filter(self):
-        # Get the text from the filter input
+        # Взимаме текста от filter_input
         size = self.filter_input.text().strip()
 
-        # Apply filter if there's a size input, otherwise clear filter
+        # Ако е въведена стойност прилагаме филтриране, в противен случай изчистваме
         if size:
-            # Use FIND_IN_SET for CSV string filtering
+            # Използваме FIND_IN_SET за CSV стрингово филтриране
             self.model.setFilter(f"FIND_IN_SET('{size}', sizes) > 0")
         else:
             self.model.setFilter("")  # Clear the filter
@@ -139,13 +141,5 @@ class MainWindow(qtw.QMainWindow):
 
 if __name__ == '__main__':
     app = qtw.QApplication(sys.argv) #Създаваме приложението
-
-    # base_url = 'https://pepina.bg/products/jeni/obuvki'
-    # try:
-    #     crawler = Crawler(base_url)
-    #     crawler.run()
-    # except Exception as e:
-    #     qtw.QMessageBox.critical(None, "Грешка при Crawler", f"Процесът на краулинг се провали: {str(e)}")
-
     window = MainWindow() #Създаваме главен прозорец
     sys.exit(app.exec()) #Стартиране на основни цикъл на приложението
